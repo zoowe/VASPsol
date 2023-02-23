@@ -45,7 +45,7 @@ MODULE POT_LPCM_K
  REAL(q), PRIVATE, SAVE :: kappa2b_k, tau, EDIFFSOL
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE., LWRITEEPS = .FALSE., LSOLHYBRID = .FALSE.
  REAL(q), PRIVATE, SAVE :: ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH
- INTEGER, PRIVATE, SAVE :: NWRITE_ITERS = 10
+ INTEGER, PRIVATE, SAVE :: NWRITE_ITERS = 10, METHOD_SH = 1
  TYPE (in_struct), PUBLIC, SAVE :: SP_IO
  REAL(q), PUBLIC, SAVE :: VACPOT_POIS = 0._q
 
@@ -64,7 +64,7 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
      & SP_T_INFO,SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, &
      & sigma_nc_k1, sigma_k1,nc_k1, eb_k1, kappa2b_k1, CORE_C1, &
      & sigma_rc_k1, tau1, ediffs, LRHOB1, LRHOION1, LWRITEEPS1, NWRITE_ITERS1, LSOLHYBRID1,&
-     & ZMIN_SH1, ZMAX_SH1, ALPHA_SH1, SIGMA_SH1 )
+     & METHOD_SH1, ZMIN_SH1, ZMAX_SH1, ALPHA_SH1, SIGMA_SH1 )
 
  IMPLICIT NONE
 
@@ -88,6 +88,7 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  REAL(q) :: tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP), CORE_C1(SP_T_INFO%NTYP)
  REAL(q) :: ZMIN_SH1, ZMAX_SH1, ALPHA_SH1, SIGMA_SH1
+ INTEGER :: METHOD_SH1
 
  !vacuum level
  RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
@@ -129,6 +130,7 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  LWRITEEPS  = LWRITEEPS1
  NWRITE_ITERS  = NWRITE_ITERS1
  LSOLHYBRID = LSOLHYBRID1
+ METHOD_SH  = METHOD_SH1
  ZMIN_SH    = ZMIN_SH1
  ZMAX_SH    = ZMAX_SH1
  ALPHA_SH   = ALPHA_SH1
@@ -1881,7 +1883,7 @@ MODULE POT_K
  LOGICAL, PRIVATE, SAVE :: LSOL = .FALSE.
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE., LWRITEEPS = .FALSE., LSOLHYBRID = .FALSE.
  REAL(q), PRIVATE, SAVE :: ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH
- INTEGER, PRIVATE, SAVE :: NWRITE_ITERS
+ INTEGER, PRIVATE, SAVE :: NWRITE_ITERS, METHOD_SH
 
  LOGICAL, SAVE :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE :: LJDFTX = .FALSE.
@@ -1901,7 +1903,8 @@ MODULE POT_K
 !!======================================================================
  SUBROUTINE SOL_INIT(IO, EDIFF, INFO, LATT_CUR, GRIDC, T_INFO, P, &
       & sigma_k_1, nc_k_1, eb_k_1, tau_1, lambda_d_k_1, kappa2b_k_1, &
-      & EDIFFSOL_1, LRHOB_1, LRHOION_1, LWRITEEPS_1, NWRITE_ITERS_1, LSOLHYBRID_1, ZMIN_SH_1, ZMAX_SH_1, ALPHA_SH_1, SIGMA_SH_1 )
+      & EDIFFSOL_1, LRHOB_1, LRHOION_1, LWRITEEPS_1, NWRITE_ITERS_1, &
+      & LSOLHYBRID_1, METHOD_SH_1, ZMIN_SH_1, ZMAX_SH_1, ALPHA_SH_1, SIGMA_SH_1 )
 
    USE poscar, ONLY : type_info 
    USE lattice, ONLY : latt, DIRKAR 
@@ -1922,6 +1925,7 @@ MODULE POT_K
    REAL(q) :: sigma_k_1, nc_k_1, eb_k_1, tau_1
    REAL(q) :: lambda_d_k_1, kappa2b_k_1
    REAL(q) :: ZMIN_SH_1, ZMAX_SH_1, ALPHA_SH_1, SIGMA_SH_1
+   INTEGER :: METHOD_SH_1
    INTEGER :: IDUM, N, IERR, K, I, II, ATOMIC_NUM
    REAL(q) :: RDUM,delta_grd,sigma_rc_k0(T_INFO%NTYP)
    COMPLEX(q) CDUM
@@ -1947,6 +1951,7 @@ MODULE POT_K
    LWRITEEPS  = LWRITEEPS_1
    NWRITE_ITERS  = NWRITE_ITERS_1
    LSOLHYBRID = LSOLHYBRID_1
+   METHOD_SH  = METHOD_SH_1
    ZMIN_SH    = ZMIN_SH_1
    ZMAX_SH    = ZMAX_SH_1
    ALPHA_SH   = ALPHA_SH_1
@@ -2240,7 +2245,7 @@ MODULE POT_K
   REAL(q),INTENT(OUT) :: Ecorr ! Atot - Ecorr3 - Ecorr4
   INTEGER(q) :: I,J,K
   REAL(q)  :: dx,dy,dz,dv
-
+   
   IF(LSOL) THEN
 
     ALLOCATE(SP_N(SP_GRIDC%MPLWV),TOTN(SP_GRIDC%MPLWV))
@@ -2281,13 +2286,21 @@ MODULE POT_K
 !-------------------------------------------------------------
 !PADDING CHARGE
 !-------------------------------------------------------------
-    CALL COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_NP )
+    CALL COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_CHTOT, SP_NP )
 
 !-------------------------------------------------------------
 !total charge in k space,valence+pseudo core
 !-------------------------------------------------------------
-   CALL RC_ADD(SP_CHTOT(1,1),1.0_q,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
-   CALL RC_ADD(PS_TOTN(1),1.0_q,SP_NP(1),1.0_q,PS_TOTN(1),SP_GRIDC)
+   !CALL RC_ADD(SP_CHTOT(1,1),1.0_q,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
+   IF (LSOLHYBRID .AND. METHOD_SH == 1 ) THEN
+       CALL RC_ADD(SP_CHTOT(1,1),1.0_q - ALPHA_SH,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
+       CALL RC_ADD(PS_TOTN(1),1.0_q,SP_NP(1),ALPHA_SH,PS_TOTN(1),SP_GRIDC)
+   ELSE
+       CALL RC_ADD(SP_CHTOT(1,1),1.0_q,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
+       CALL RC_ADD(PS_TOTN(1),1.0_q,SP_NP(1),ALPHA_SH,PS_TOTN(1),SP_GRIDC)
+   ENDIF
+
+   !CALL RC_ADD(PS_TOTN(1),1.0_q,SP_NP(1),1.0_q,PS_TOTN(1),SP_GRIDC)
    CALL SETUNB(PS_TOTN,SP_GRIDC)
 
 !   PS_TOTN = SP_CHTOT + SP_N + SP_NP
@@ -2319,7 +2332,7 @@ MODULE POT_K
            & SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k,&
            & sigma_k, nc_k, eb_k, kappa2b_k, CORE_C, sigma_rc_k, &
            & tau, EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID,&
-           & ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH)
+           & METHOD_SH, ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH)
 
 #ifdef debugsol
       sol_io 'Return from vcorr_lpcm minimization'
@@ -2424,7 +2437,7 @@ MODULE POT_K
  END SUBROUTINE Vcorrection
 
 
-SUBROUTINE COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_NP )
+SUBROUTINE COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO, SP_CHTOT, SP_NP )
 
  USE constant
  USE mgrid, ONLY : grid_3d
@@ -2441,41 +2454,99 @@ SUBROUTINE COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_NP )
  TYPE(potcar),INTENT(IN) :: SP_P (SP_T_INFO%NTYP)
 
  REAL(q),ALLOCATABLE :: WORK( : )
+ RGRID, ALLOCATABLE :: RWORK(:)
+ COMPLEX(q),ALLOCATABLE :: CWORK(:) ! Valence electron density
 
  !ionic charge in k space
  COMPLEX(q),INTENT(INOUT) :: SP_NP(SP_GRIDC%MPLWV)
+ COMPLEX(q),INTENT(IN) :: SP_CHTOT(SP_GRIDC%MPLWV) ! Valence electron density
  ! REAL(q),INTENT(IN) :: sigma_nc_k,sigma_rc_k,CORE_C
  INTEGER :: SP_NC,SP_N1,SP_N2,SP_N3,SP_NT,SP_NIS,SP_NI,SP_NG
  INTEGER :: I, J, IND, NX, NY, NZ
- REAL(q) :: DAMP, MAXPOS(3), TOPZ, MINPOS(3), BOTZ
+ REAL(q) :: DAMP, MAXPOS(3), TOPZ, MINPOS(3), BOTZ,dZ2,dZ, SIGMA_
  REAL(q), ALLOCATABLE :: NPZ(:)
 
- BOTZ = ZMIN_SH
- TOPZ = ZMAX_SH
- IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMIN_SH FROM INCAR OR DEFAULT",F12.6)') ZMIN_SH
- IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH FROM INCAR OR DEFAULT",F12.6)') ZMAX_SH
+ IF ( METHOD_SH == 2 ) THEN
+     BOTZ = ZMIN_SH
+     TOPZ = ZMAX_SH
+     IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMIN_SH FROM INCAR OR DEFAULT",F12.6)') ZMIN_SH
+     IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH FROM INCAR OR DEFAULT",F12.6)') ZMAX_SH
 
- IF ( ZMIN_SH < 1.E-6_q ) THEN
-     MINPOS = MINVAL( SP_T_INFO%POSION, 2 )
-     BOTZ = MINPOS(3)   
-     IF ( PK_COUNTER == 1 .AND.  SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMIN_SH IS SET AS THE ZCOORDINATE OF THE LOWEST ATOM")')
+     IF ( ZMIN_SH < 1.E-6_q ) THEN
+         MINPOS = MINVAL( SP_T_INFO%POSION, 2 )
+         BOTZ = MINPOS(3)   
+         IF ( PK_COUNTER == 1 .AND.  SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMIN_SH IS SET AS THE ZCOORDINATE OF THE LOWEST ATOM")')
+     ENDIF
+     IF ( ZMAX_SH < 1.E-6_q .OR. ZMAX_SH < BOTZ ) THEN
+         MAXPOS = MAXVAL( SP_T_INFO%POSION, 2 )
+         TOPZ = MAXPOS(3)
+         IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH IS SET AS THE ZCOORDINATE OF THE HIGHEST ATOM")')
+         !IF (SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH IS SET AS THE ZCOORDINATE OF THE HIGHEST ATOM")')
+     ENDIF
+     IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        ")')
  ENDIF
- IF ( ZMAX_SH < 1.E-6_q .OR. ZMAX_SH < BOTZ ) THEN
-     MAXPOS = MAXVAL( SP_T_INFO%POSION, 2 )
-     TOPZ = MAXPOS(3)
-     IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH IS SET AS THE ZCOORDINATE OF THE HIGHEST ATOM")')
-     !IF (SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH IS SET AS THE ZCOORDINATE OF THE HIGHEST ATOM")')
- ENDIF
- IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        ")')
 
  ! Calculate plan average padding charge
  ALLOCATE( NPZ( SP_GRIDC%NGZ ) )
  NPZ = 0.0_q
- DO IND = 1, SP_GRIDC%NGZ
-    NPZ(IND) = - ERRFC( ( TOPZ - IND*1.0_q/SP_GRIDC%NGZ ) / SIGMA_SH / SQRT(2._q) )
-    NPZ(IND) = NPZ(IND) + ERRFC( ( BOTZ - IND*1.0_q/SP_GRIDC%NGZ ) / SIGMA_SH / SQRT(2._q) )
- ENDDO
- NPZ = NPZ / 2.0_q * nc_k * ALPHA_SH
+
+ IF ( METHOD_SH == 1 ) THEN
+     !-------------------------------------------------------------
+     ! 1. copy valence density to working array
+     ! 2. transform valence density from rec. to real.
+     ! 3. Unpack it to real space
+     ! 4. calculate plannar average.
+     !-------------------------------------------------------------
+     ALLOCATE( CWORK(SP_GRIDC%MPLWV) )
+     ALLOCATE( RWORK(DIMREAL(SP_GRIDC%MPLWV)))
+     CALL RC_ADD(SP_CHTOT, 1.0_q, SP_CHTOT, 0.0_q, CWORK, SP_GRIDC)    
+     CALL FFT3D(CWORK,SP_GRIDC,1)
+     CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK,SP_GRIDC)
+     RWORK = RWORK / SP_LATT_CUR%OMEGA
+     CALL AVERAG(SP_GRIDC, 3, RWORK, NPZ, .TRUE.)
+     !IF (SP_IO%IU0>=0) THEN
+     !   OPEN(7891, file = 'NPZ.dat', status = 'UNKNOWN', Access = 'append')
+     !   DO IND = 1, SP_GRIDC%NGZ - 1
+     !      WRITE( 7891, '(E20.11)',  advance="no" ) NPZ( IND )
+     !   ENDDO
+     !   WRITE( 7891, '(E20.11)' ) NPZ( SP_GRIDC%NGZ )
+     !   CLOSE( 7891 )
+     !ENDIF
+
+     DEALLOCATE( RWORK )
+     ! Use gaussian to smooth the NPZ
+     ALLOCATE( RWORK( SP_GRIDC%NGZ ) )
+     dZ = 1.0_q/SP_GRIDC%NGZ
+     dZ2 = dZ*dZ/(SIGMA_SH*SIGMA_SH)
+     SIGMA_ = SIGMA_SH/dZ
+     RWORK = 0.0_q
+     DO IND=1, SP_GRIDC%NGZ
+         !RWORK(IND) = NPZ(IND)
+         DO I=1,SP_GRIDC%NGZ
+             !RWORK(IND) = RWORK(IND) + NPZ(I)/(SIGMA_SH*SQRT(2.0_q*PI))*EXP(-0.5_q*(IND-I)*(IND-I)*dZ2) 
+             RWORK(IND) = RWORK(IND) + NPZ(I)/(SIGMA_*SQRT(2.0_q*PI))*EXP(-0.5_q*(IND-I)*(IND-I)*dZ2) !/(SIGMA_SH*SIGMA_SH)) 
+         ENDDO
+     ENDDO
+     NPZ = RWORK
+     !IF (SP_IO%IU0>=0) THEN
+     !   OPEN(7891, file = 'NPZ.dat', status = 'UNKNOWN', Access = 'append')
+     !   DO IND = 1, SP_GRIDC%NGZ - 1
+     !      WRITE( 7891, '(E20.11)',  advance="no" ) NPZ( IND )
+     !   ENDDO
+     !   WRITE( 7891, '(E20.11)' ) NPZ( SP_GRIDC%NGZ )
+     !   CLOSE( 7891 )
+     !ENDIF
+ 
+     DEALLOCATE( RWORK )
+     DEALLOCATE( CWORK )
+     
+ ELSEIF( METHOD_SH == 2 ) THEN
+     DO IND = 1, SP_GRIDC%NGZ
+         NPZ(IND) = - ERRFC( ( TOPZ - IND*1.0_q/SP_GRIDC%NGZ ) / SIGMA_SH / SQRT(2._q) )
+         NPZ(IND) = NPZ(IND) + ERRFC( ( BOTZ - IND*1.0_q/SP_GRIDC%NGZ ) / SIGMA_SH / SQRT(2._q) )
+     ENDDO
+     NPZ = NPZ / 2.0_q * nc_k
+ ENDIF
  ! IF (SP_IO%IU0>=0) THEN
  !    OPEN(7891, file = 'NPZ.dat', status = 'UNKNOWN', Access = 'append')
  !    DO IND = 1, SP_GRIDC%NGZ - 1
@@ -3108,9 +3179,10 @@ MODULE solvation
   REAL(q), PRIVATE, SAVE  :: kappa2b_k = 0._q 
   REAL(q), PRIVATE, SAVE  :: EDIFFSOL ! set in module pot_k
 ! Explicit/impicit parameter
+  INTEGER, PRIVATE, SAVE  :: METHOD_SH = 1
   REAL(q), PRIVATE, SAVE  :: ZMIN_SH = 0.0_q
   REAL(q), PRIVATE, SAVE  :: ZMAX_SH = 0.0_q
-  REAL(q), PRIVATE, SAVE  :: ALPHA_SH = 6.0_q
+  REAL(q), PRIVATE, SAVE  :: ALPHA_SH = 0.0_q
   REAL(q), PRIVATE, SAVE  :: SIGMA_SH = 0.05_q
   INTEGER, PRIVATE, SAVE  :: NWRITE_ITERS = 10
 !local variables
@@ -3426,7 +3498,27 @@ CONTAINS
           STOP
        ENDIF
        CALL XML_INCAR('LSOLHYBRID','L',IDUM,RDUM,CDUM,LSOLHYBRID,CHARAC,N)
-     
+
+       !---------------------------------------------------------------
+       !METHOD_SH
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'METHOD_SH','=','#',';','I',METHOD_SH, &
+            &  RDUM,CDUM, LDUM, CHARAC,N,1,IERR)
+#ifdef debugsol
+       IF (IERR == 3 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''METHOD_SH'', Method for padding charge'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'METHOD_SH = ', METHOD_SH
+       ELSE IF (IERR == 0 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : METHOD_SH = ', METHOD_SH
+       ENDIF
+#endif
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''METHOD_SH''from INCAR.'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+       CALL XML_INCAR('METHOD_SH','I',METHOD_SH,RDUM,CDUM,LDUM,CHARAC,N)
+       
        !---------------------------------------------------------------
        !ZMAX_SH
        !---------------------------------------------------------------
@@ -3497,6 +3589,7 @@ CONTAINS
           IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
           STOP
        ENDIF
+       IF ( .NOT. LSOLHYBRID ) ALPHA_SH = 0.0_q
        CALL XML_INCAR('ALPHA_SH','F',IDUM,ALPHA_SH,CDUM,LDUM,CHARAC,N)
 
        !---------------------------------------------------------------
@@ -3553,7 +3646,7 @@ CONTAINS
 
     IF (IO%IU6>=0) THEN
        WRITE(IO%IU6,100) LSOL, eb_k, sigma_k, nc_k, tau, &
-            & lambda_d_k, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID, ZMIN_SH, ZMAX_SH, SIGMA_SH, ALPHA_SH
+            & lambda_d_k, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID, METHOD_SH, ZMIN_SH, ZMAX_SH, SIGMA_SH, ALPHA_SH
     ENDIF
 
 100 FORMAT( &
@@ -3569,10 +3662,11 @@ CONTAINS
              '   LWRITEEPS      =',L10,  '     write epsilon' /&
              '   NWRITE_ITERS   =',I10,  '     number of iters to write data' /&
              '   LSOLHYBRID     =',L10,  '     Use implicit/explict model' / &
+             '   METHOD_SH      =',I10,  '     Method for padding charge' / &
              '   ZMIN_SH        =',F10.6,  '     Lower limit of explict region' /&
              '   ZMAX_SH        =',F10.6,  '     Higher limit of explict region' /&
              '   SIGMA_SH       =',F10.6,  '     width of the explict/implicit region' /&
-             '   ALPHA_SH       =',F10.6,  '     factor for padding charge, alpha_sh * nc_k' )
+             '   ALPHA_SH       =',F10.6,  '     factor for padding charge' )
 
 
     RETURN
@@ -3614,6 +3708,7 @@ CONTAINS
        CALL XML_INCAR('LWRITEEPS','L',IDUM,RDUM,CDUM,LWRITEEPS,CHARAC,1)
        CALL XML_INCAR('NWRITE_ITERS','I',NWRITE_ITERS,RDUM,CDUM,LDUM,CHARAC,1)
        CALL XML_INCAR('LSOLHYBRID','L',IDUM,RDUM,CDUM,LSOLHYBRID,CHARAC,1)
+       CALL XML_INCAR('METHOD_SH','I',METHOD_SH,RDUM,CDUM,LDUM,CHARAC,1)
        CALL XML_INCAR('ZMIN_SH','F',IDUM,ZMIN_SH,CDUM,LDUM,CHARAC,1)
        CALL XML_INCAR('ZMAX_SH','F',IDUM,ZMAX_SH,CDUM,LDUM,CHARAC,1)
        CALL XML_INCAR('ALPHA_SH','F',IDUM,ALPHA_SH,CDUM,LDUM,CHARAC,1)
@@ -3670,7 +3765,7 @@ CONTAINS
 
     CALL SOL_INIT(IO_1, EDIFF_1, INFO, LATT_CUR, GRIDC, T_INFO, P, &
       & sigma_k, nc_k, eb_k, tau, lambda_d_k, kappa2b_k, &
-      & EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID, ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH )
+      & EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID, METHOD_SH, ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH )
          
     CALL VCORRECTION(GRIDC, P, LATT_CUR, INFO, T_INFO, WDES, &
          & CHTOT, Vcorr, Ecorr, EIFOR_SOL) 
