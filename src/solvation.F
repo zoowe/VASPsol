@@ -2544,6 +2544,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
  USE lattice, ONLY : latt,DIRKAR
  USE poscar, ONLY : type_info
  USE pseudo, ONLY : potcar
+ USE c2f_interface, ONLY : ERRFC
 
  IMPLICIT NONE
 
@@ -2567,7 +2568,10 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
  COMPLEX(q), OPTIONAL, INTENT(IN) :: Vcorr(SP_GRIDC%MPLWV)
  COMPLEX(q), OPTIONAL, INTENT(IN) :: Vdiel(SP_GRIDC%MPLWV)
  INTEGER :: I, J
- REAL(q) :: DAMP
+ REAL(q) :: DAMP, MAXPOS(3), TOPZ
+
+ MAXPOS = MAXVAL( SP_T_INFO%POSION, 2 )
+ TOPZ = MAXPOS(3)
 
  imag_i = cmplx(0._q,1._q)
 
@@ -2628,13 +2632,12 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              ! from core
              !-------------------------------------------------------
           ELSE IF ( flag == 3 ) THEN
-             DAMP = 1.0_q
-             IF ( SP_T_INFO%POSION(3, SP_NI) > INTERFACELIMIT ) THEN
-                 DAMP = DAMPINGFACTOR
-             ENDIF
+
+             DAMP = 1.0_q + ERRFC( ( TOPZ - SP_T_INFO%POSION(3, SP_NI))/ INTERFACELIMIT / SQRT(2._q) )/2.0_q * DAMPINGFACTOR
+
              SP_N(SP_NG) = SP_N(SP_NG) + CORE_C(SP_NT) * SP_CEXPF * &
                   & EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)) + &
-                  PADDING_C(SP_NT) * SP_CEXPF * &
+                  & PADDING_C(SP_NT) * SP_CEXPF * &
                   & EXP(-0.5_q*SP_GSQU*((sigma_rpadding_k(SP_NT)/DAMP)**2))
 
           !-------------------------------------------------------
