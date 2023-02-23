@@ -3117,7 +3117,7 @@ SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CVPSP, CHTOT)
   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
 #endif
   VACPOT = VACPOT_POIS - VACPOT_PSP
-  IF (SP_IO%IU6>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
+  !IF (SP_IO%IU6>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
 !#ifdef debugsolwf
 !  !shift by vacpot                                                
 !  RV = RV + VACPOT
