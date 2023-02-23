@@ -40,11 +40,12 @@ MODULE POT_LPCM_K
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
  REAL(q), PRIVATE, SAVE :: CHGMIN = 1E-10_q
  COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:), sigma_rpadding_k(:), PADDING_C(:)
- REAL(q), PRIVATE, SAVE :: INTERFACELIMIT, DAMPINGFACTOR
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
  REAL(q), PRIVATE, SAVE :: sigma_nc_k, sigma_k, nc_k, eb_k
  REAL(q), PRIVATE, SAVE :: kappa2b_k, tau, EDIFFSOL
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE., LWRITEEPS = .FALSE., LSOLHYBRID = .FALSE.
+ REAL(q), PRIVATE, SAVE :: ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH
+ INTEGER, PRIVATE, SAVE :: NWRITE_ITERS = 10
  TYPE (in_struct), PUBLIC, SAVE :: SP_IO
  REAL(q), PUBLIC, SAVE :: VACPOT_POIS = 0._q
 
@@ -61,9 +62,9 @@ MODULE POT_LPCM_K
 !!====================================================================
 SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
      & SP_T_INFO,SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, &
-     & sigma_nc_k1, sigma_k1,nc_k1, eb_k1, kappa2b_k1, CORE_C1, PADDING_C1,&
-     & sigma_rc_k1, sigma_rpadding_k1, tau1, ediffs, LRHOB1, LRHOION1, LWRITEEPS1, LSOLHYBRID1,&
-     & INTERFACELIMIT1, DAMPINGFACTOR1 )
+     & sigma_nc_k1, sigma_k1,nc_k1, eb_k1, kappa2b_k1, CORE_C1, &
+     & sigma_rc_k1, tau1, ediffs, LRHOB1, LRHOION1, LWRITEEPS1, NWRITE_ITERS1, LSOLHYBRID1,&
+     & ZMIN_SH1, ZMAX_SH1, ALPHA_SH1, SIGMA_SH1 )
 
  IMPLICIT NONE
 
@@ -73,7 +74,7 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  TYPE(grid_3d),INTENT(IN) :: SP_GRIDC
  !TYPE (in_struct),INTENT(IN) :: IO
  LOGICAL :: LRHOB1, LRHOION1, LWRITEEPS1, LSOLHYBRID1
-
+ INTEGER :: NWRITE_ITERS1
  COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
  COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
  COMPLEX(q),INTENT(OUT) :: Vdiel(SP_GRIDC%MPLWV)
@@ -86,8 +87,8 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1
  REAL(q) :: tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP), CORE_C1(SP_T_INFO%NTYP)
- REAL(q), INTENT(IN) :: sigma_rpadding_k1(SP_T_INFO%NTYP), PADDING_C1(SP_T_INFO%NTYP)
- REAL(q), INTENT(IN) :: INTERFACELIMIT1, DAMPINGFACTOR1
+ REAL(q) :: ZMIN_SH1, ZMAX_SH1, ALPHA_SH1, SIGMA_SH1
+
  !vacuum level
  RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
  COMPLEX(q),ALLOCATABLE :: CWORK_K(:)
@@ -120,17 +121,18 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  eb_k =  eb_k1
  kappa2b_k =  kappa2b_k1
  CORE_C =  CORE_C1
- PADDING_C =  PADDING_C1
  sigma_rc_k =  sigma_rc_k1
- sigma_rpadding_k =  sigma_rpadding_k1
  tau = tau1
  EDIFFSOL = ediffs
  LRHOB =  LRHOB1
  LRHOION = LRHOION1
- LWRITEEPS = LWRITEEPS1
+ LWRITEEPS  = LWRITEEPS1
+ NWRITE_ITERS  = NWRITE_ITERS1
  LSOLHYBRID = LSOLHYBRID1
- INTERFACELIMIT = INTERFACELIMIT1
- DAMPINGFACTOR = DAMPINGFACTOR1
+ ZMIN_SH    = ZMIN_SH1
+ ZMAX_SH    = ZMAX_SH1
+ ALPHA_SH   = ALPHA_SH1
+ SIGMA_SH   = SIGMA_SH1
 !---------------------------------------------------------------
 ! initialize
 !---------------------------------------------------------------
@@ -246,13 +248,13 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
 
  !rhob = div((epsilon-1)grad phi)
  !phi in rec space
- IF (LRHOB) CALL COMPUTE_RHOB(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, & 
+ IF (LRHOB .AND. MOD(PK_COUNTER, NWRITE_ITERS) == 0) CALL COMPUTE_RHOB(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, & 
       & SP_D_EPS, PHI_TILDA, RHOB)
 
  !rhion = -kappa^2 * phi, in real space
  !phi in rec space
  !mind: after this the phi will be in real space
- IF (LRHOION) CALL COMPUTE_RHOION(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, &
+ IF (LRHOION .AND. MOD(PK_COUNTER, NWRITE_ITERS) == 0) CALL COMPUTE_RHOION(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, &
       & SP_KAPPA2, PHI_TILDA, RHOION)
  
  !vacuum level
@@ -421,7 +423,6 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
  
  
  DO I=1, CE_GRIDC%RL%NP
-
    CE_S(I) = ERRFC( log(MAX(REAL(RWORK(I),KIND=q),CHGMIN)/nc_k) / SQRT(2._q)/sigma_k ) / 2._q
 
    CE_d_eps(I) = 1._q + (eb_k - 1._q) * CE_S(I)
@@ -430,11 +431,12 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
 
  END DO
 
- IF ( LWRITEEPS ) THEN
-     CALL WRITE_TO_FILE(CE_GRIDC, CE_LATT_CUR, CE_T_INFO, 'TOTAL.vasp', RWORK*CE_LATT_CUR%OMEGA)
+ IF ( LWRITEEPS .AND. MOD(PK_COUNTER, NWRITE_ITERS) == 0 ) THEN
+     IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PSEUDO CHARGE'
+     CALL WRITE_TO_FILE(CE_GRIDC, CE_LATT_CUR, CE_T_INFO, 'PSEUDOCHG.vasp', RWORK*CE_LATT_CUR%OMEGA)
 
      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing EPS'
-     CALL WRITE_TO_FILE(CE_GRIDC, CE_LATT_CUR, CE_T_INFO, 'EPS', CE_d_eps)
+     CALL WRITE_TO_FILE(CE_GRIDC, CE_LATT_CUR, CE_T_INFO, 'EPS.vasp', CE_d_eps)
  ENDIF
 
 #ifdef debugsol
@@ -1732,7 +1734,8 @@ SUBROUTINE COMPUTE_PLANAR_AVERAGE(GRIDC, RWORK, RWORK_AVE)
  DEALLOCATE( WORK )
 
 END SUBROUTINE COMPUTE_PLANAR_AVERAGE
- 
+
+
 !>========================== SUBROUTINE COMPUTE_RHOB ================
 !!
 !! bound charge in real space
@@ -1870,14 +1873,15 @@ MODULE POT_K
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
  ! numerical params
  REAL(q), PRIVATE, SAVE :: sigma_nc_k
- REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:), sigma_rpadding_k(:), PADDING_C(:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE :: INTERFACELIMIT, DAMPINGFACTOR
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
  ! empirical params
  REAL(q), PRIVATE, SAVE :: sigma_k, nc_k, eb_k
  REAL(q), PRIVATE, SAVE :: lambda_d_k, kappa2b_k, tau, EDIFFSOL
 
  LOGICAL, PRIVATE, SAVE :: LSOL = .FALSE.
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE., LWRITEEPS = .FALSE., LSOLHYBRID = .FALSE.
+ REAL(q), PRIVATE, SAVE :: ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH
+ INTEGER, PRIVATE, SAVE :: NWRITE_ITERS
 
  LOGICAL, SAVE :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE :: LJDFTX = .FALSE.
@@ -1897,7 +1901,7 @@ MODULE POT_K
 !!======================================================================
  SUBROUTINE SOL_INIT(IO, EDIFF, INFO, LATT_CUR, GRIDC, T_INFO, P, &
       & sigma_k_1, nc_k_1, eb_k_1, tau_1, lambda_d_k_1, kappa2b_k_1, &
-      & EDIFFSOL_1, LRHOB_1, LRHOION_1, LWRITEEPS_1, LSOLHYBRID_1 )
+      & EDIFFSOL_1, LRHOB_1, LRHOION_1, LWRITEEPS_1, NWRITE_ITERS_1, LSOLHYBRID_1, ZMIN_SH_1, ZMAX_SH_1, ALPHA_SH_1, SIGMA_SH_1 )
 
    USE poscar, ONLY : type_info 
    USE lattice, ONLY : latt, DIRKAR 
@@ -1917,11 +1921,12 @@ MODULE POT_K
    REAL(q) :: sigma_gauss, RCS(T_INFO%NTYP),RWIGS(T_INFO%NTYP)
    REAL(q) :: sigma_k_1, nc_k_1, eb_k_1, tau_1
    REAL(q) :: lambda_d_k_1, kappa2b_k_1
-   REAL(q) :: INTERFACELIMIT_1, DAMPINGFACTOR_1
+   REAL(q) :: ZMIN_SH_1, ZMAX_SH_1, ALPHA_SH_1, SIGMA_SH_1
    INTEGER :: IDUM, N, IERR, K, I, II, ATOMIC_NUM
-   REAL(q) :: RDUM,delta_grd,sigma_rc_k0(T_INFO%NTYP), sigma_rpadding_k0(T_INFO%NTYP)
+   REAL(q) :: RDUM,delta_grd,sigma_rc_k0(T_INFO%NTYP)
    COMPLEX(q) CDUM
    LOGICAL :: LRHOB_1, LRHOION_1, LWRITEEPS_1, LSOLHYBRID_1
+   INTEGER :: NWRITE_ITERS_1
    LOGICAL :: LOPEN,LDUM,LIONODE_FLAG,LFLUEX
    CHARACTER (1) CHARAC
    
@@ -1939,12 +1944,15 @@ MODULE POT_K
    kappa2b_k = kappa2b_k_1
    LRHOB = LRHOB_1
    LRHOION = LRHOION_1
-   LWRITEEPS = LWRITEEPS_1
+   LWRITEEPS  = LWRITEEPS_1
+   NWRITE_ITERS  = NWRITE_ITERS_1
    LSOLHYBRID = LSOLHYBRID_1
+   ZMIN_SH    = ZMIN_SH_1
+   ZMAX_SH    = ZMAX_SH_1
+   ALPHA_SH   = ALPHA_SH_1
+   SIGMA_SH   = SIGMA_SH_1
    EDIFFSOL = EDIFFSOL_1
    EDIFFSOL = EDIFFSOL_1
-   INTERFACELIMIT = 1.0_q !INTERFACELIMIT_1
-   DAMPINGFACTOR  = 1.0_q !DAMPINGFACTOR_1
    
 #ifdef MPI
    IF (GRIDC%COMM%NODE_ME==GRIDC%COMM%IONODE) THEN
@@ -1956,9 +1964,8 @@ MODULE POT_K
 
  IF (PK_COUNTER == 1) THEN
     ALLOCATE(sigma_rc_k(T_INFO%NTYP))
-    ALLOCATE(sigma_rpadding_k(T_INFO%NTYP))
     ALLOCATE(CORE_C(T_INFO%NTYP))
-    ALLOCATE(PADDING_C(T_INFO%NTYP))
+
 #ifdef debugsol
     sol_io 'Setting up the paramters.'
     sol_io 'Unless  explicity specified in the INCAR file these values will be used as the defaults'
@@ -1971,9 +1978,8 @@ MODULE POT_K
 
     !---------------------------------------------------------------
     !Defaults values of sigma_nc_k(sigma for the gaussian nuclei), 
-    !Defaults values of sigma_rpadding_k (sigma for the gaussian padding)
     !sigma_rc_k(sigma for the pseudo core)
-    !and CORE_C, PADDING_C
+    !and CORE_C 
     !---------------------------------------------------------------
     sigma_nc_k = 1.6_q * delta_grd !sigma for point charges
 
@@ -1986,7 +1992,6 @@ MODULE POT_K
     sol_io 'RCOREs = ', RCS      
 #endif
     sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
-    sigma_rpadding_k = RWIGS    ! sigma for padding charge
 
     DO II = 1, T_INFO%NTYP
        ATOMIC_NUM = INT(P(II)%ZVALF_ORIG+P(II)%ZCORE)
@@ -2008,7 +2013,6 @@ MODULE POT_K
        ELSE
           CORE_C(II) = 1._q
        ENDIF
-       PADDING_C(II) = 0.01_q  
     ENDDO
 
     !------------------------------------------------------------------
@@ -2067,32 +2071,6 @@ MODULE POT_K
          STOP
       ENDIF
 
-      !---------------------------------------------------------------
-      !sigma_rpadding_k
-      !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RPADDING_K','=','#',';','F',IDUM,sigma_rpadding_k,CDUM,LDUM,CHARAC,N,T_INFO%NTYP,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-
-         sol_io '''SIGMA_RPADDING_K'',the width of padding gaussians, not specified, using the default'
-         sol_io 'sigma_rpadding_k = ',sigma_rpadding_k
-
-      ELSE IF (IERR == 0 ) THEN
-
-         sol_io 'Found : sigma_rpadding_k(width of padding gaussians) = ',sigma_rpadding_k
-         DO I=1,T_INFO%NTYP
-            sigma_rpadding_k(I) = sigma_rpadding_k0(I)
-         ENDDO
-
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         sol_io 'Error reading ''SIGMA_RPADDING_K''from INCAR.'
-         sol_io  ' Error code = ', IERR
-         STOP
-      ENDIF
-
 
       !---------------------------------------------------------------
       !CORE_C
@@ -2117,56 +2095,6 @@ MODULE POT_K
          sol_io ' Error code = ', IERR
          STOP
       ENDIF
-
-      !---------------------------------------------------------------
-      !PADDING_C
-      !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'PADDING_C','=','#',';','F',IDUM,PADDING_C,CDUM,LDUM,CHARAC,N,T_INFO%NTYP,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-
-         sol_io '''PADDING_C'', magnitude of pseudo-core charge, not specified, using the default'
-
-         sol_io 'PADDING_C = ', PADDING_C
-
-      ELSE IF (IERR == 0 ) THEN
-
-         sol_io 'Found : PADDING_C (magnitude of padding charge) = ', PADDING_C
-
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         sol_io 'Error reading ''PADDING_C''from INCAR.'
-         sol_io ' Error code = ', IERR
-         STOP
-      ENDIF
-     
-      ! Set PADDING_C = 0 if not LSOLHYBRID
-      IF ( .NOT. LSOLHYBRID ) PADDING_C = 0._q
-
-      !---------------------------------------------------------------
-      !INTERFACELIMIT
-      !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'INTERFACELIMIT','=','#',';','F',IDUM,INTERFACELIMIT,CDUM,LDUM,CHARAC,N,1,IERR)
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-              sol_io 'Error reading ''INTERFACELIMIT''from INCAR.'
-         sol_io ' Error code = ', IERR
-         STOP
-      ENDIF
-
-      !---------------------------------------------------------------
-      !DAMPINGFACTOR
-      !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'DAMPINGFACTOR','=','#',';','F',IDUM,DAMPINGFACTOR,CDUM,LDUM,CHARAC,N,1,IERR)
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-              sol_io 'Error reading ''DAMPINGFACTOR''from INCAR.'
-         sol_io ' Error code = ', IERR
-         STOP
-      ENDIF
-
 
       !---------------------------------------------------------------
       !LJDFTX
@@ -2226,8 +2154,7 @@ MODULE POT_K
 
    CLOSE(SP_IO%IU5)
 
-   IF ( PK_COUNTER == 1 ) CALL SOL_WRITER2(SP_IO, T_INFO, LSOLHYBRID, SIGMA_RC_K, CORE_C, SIGMA_RPADDING_K, PADDING_C, &
-                                          & INTERFACELIMIT, DAMPINGFACTOR )
+   IF ( PK_COUNTER == 1 ) CALL SOL_WRITER2(SP_IO, T_INFO, LSOLHYBRID, SIGMA_RC_K, CORE_C )
    RETURN
 
  END SUBROUTINE SOL_INIT
@@ -2239,8 +2166,7 @@ MODULE POT_K
 !
 !
 !***********************************************************************
-  SUBROUTINE SOL_WRITER2(IO, T_INFO, LSOLHYBRID, SIGMA_RC_K, CORE_C,&
-                         &SIGMA_RPADDING_K, PADDING_C, INTERFACELIMIT, DAMPINGFACTOR)
+  SUBROUTINE SOL_WRITER2(IO, T_INFO, LSOLHYBRID, SIGMA_RC_K, CORE_C )
 
     USE base
     USE poscar, ONLY : type_info 
@@ -2250,8 +2176,7 @@ MODULE POT_K
     TYPE (in_struct), INTENT(in) :: IO
     TYPE (type_info), INTENT(IN) :: T_INFO
     INTEGER :: NI
-    REAL(q), INTENT(IN) :: SIGMA_RC_K(T_INFO%NTYP), CORE_C(T_INFO%NTYP), SIGMA_RPADDING_K(T_INFO%NTYP), PADDING_C(T_INFO%NTYP), &
-                          & DAMPINGFACTOR, INTERFACELIMIT
+    REAL(q), INTENT(IN) :: SIGMA_RC_K(T_INFO%NTYP), CORE_C(T_INFO%NTYP)
     LOGICAL, INTENT(IN) :: LSOLHYBRID
     
     ! early exit if possible
@@ -2261,14 +2186,10 @@ MODULE POT_K
        WRITE(IO%IU6,200) 
        WRITE(IO%IU6,201) 'SIGMA_RC_K',(sigma_rc_k(NI),NI=1,T_INFO%NTYP)
        WRITE(IO%IU6,201) 'CORE_C',(CORE_C(NI),NI=1,T_INFO%NTYP)
-       IF ( LSOLHYBRID ) WRITE(IO%IU6,201) 'SIGMA_RPADDING_K',(sigma_rpadding_k(NI),NI=1,T_INFO%NTYP)
-       IF ( LSOLHYBRID ) WRITE(IO%IU6,201) 'PADDING_C',(PADDING_C(NI),NI=1,T_INFO%NTYP)
-       IF ( LSOLHYBRID ) WRITE(IO%IU6,201) 'INTERFACELIMIT', INTERFACELIMIT
-       IF ( LSOLHYBRID ) WRITE(IO%IU6,201) 'DAMPINGFACTOR', DAMPINGFACTOR
        WRITE(IO%IU6,202) 
     ENDIF
 
-200 FORMAT( '    Additional parameters for solvent model:' )
+200 FORMAT( '    LSOL: Additional parameters for solvent model:' )
 201 FORMAT(('   ',A17,' =',10F8.3 ))
 202 FORMAT( '    ' )
     RETURN
@@ -2278,7 +2199,7 @@ MODULE POT_K
  
 !>==========================SUBROUTINE Vcorrection=====================
 !!
-!! Creates PS_TOTN(n_val+pseudo_core) and TOTN(n_val+N_gauss)
+!! Creates S_TOTN(n_val+pseudo_core) and TOTN(n_val+N_gauss)
 !! Passes them on to vcorrection_lpcm in pot_lpcm_cav_k.F or to 
 !! the jdftx_interface
 !! Uses the so obtained Vcorr, Vdiel and Atot to compute the net 
@@ -2355,17 +2276,21 @@ MODULE POT_K
 !-------------------------------------------------------------
 !CHARGE BALL fourier, flag=3
 !-------------------------------------------------------------
-    CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,3)
+    CALL IONIC_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,3)
+
+!-------------------------------------------------------------
+!PADDING CHARGE
+!-------------------------------------------------------------
+    CALL COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_NP )
 
 !-------------------------------------------------------------
 !total charge in k space,valence+pseudo core
 !-------------------------------------------------------------
-   SP_SCALE = 1._q
-   CALL PADDING_FACTOR( SP_INFO, SP_T_INFO, SP_SCALE )
-   CALL RC_ADD(SP_CHTOT(1,1),SP_SCALE,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
+   CALL RC_ADD(SP_CHTOT(1,1),1.0_q,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
+   CALL RC_ADD(PS_TOTN(1),1.0_q,SP_NP(1),1.0_q,PS_TOTN(1),SP_GRIDC)
    CALL SETUNB(PS_TOTN,SP_GRIDC)
 
-!   PS_TOTN = SP_CHTOT*SP_SCALE + SP_N
+!   PS_TOTN = SP_CHTOT + SP_N + SP_NP
 
 #ifdef debugsol
    sol_io 'Begin minimization'
@@ -2392,9 +2317,9 @@ MODULE POT_K
 !-------------------------------------------------------------
       CALL Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO,&
            & SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k,&
-           & sigma_k, nc_k, eb_k, kappa2b_k, CORE_C, PADDING_C, sigma_rc_k, sigma_rpadding_k,&
-           & tau, EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, LSOLHYBRID,&
-           & INTERFACELIMIT, DAMPINGFACTOR)
+           & sigma_k, nc_k, eb_k, kappa2b_k, CORE_C, sigma_rc_k, &
+           & tau, EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID,&
+           & ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH)
 
 #ifdef debugsol
       sol_io 'Return from vcorr_lpcm minimization'
@@ -2498,37 +2423,92 @@ MODULE POT_K
 
  END SUBROUTINE Vcorrection
 
-!>=====================SUBROUTINE PADDING_FACTOR=======================
-!!
-!! calculate scaling factor for valence electron, only for LSOLHBRID 
-!!=====================================================================
-SUBROUTINE PADDING_FACTOR( SP_INFO, SP_T_INFO, SP_SCALE )
+
+SUBROUTINE COMPUTE_PADDING_CHARGE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_NP )
+
+ USE constant
+ USE mgrid, ONLY : grid_3d
+ USE lattice, ONLY : latt,DIRKAR
  USE poscar, ONLY : type_info
  USE pseudo, ONLY : potcar
- 
+ USE c2f_interface, ONLY : ERRFC, ERRF
+
  IMPLICIT NONE
- TYPE (info_struct), INTENT(IN) :: SP_INFO
+
+ TYPE (grid_3d),INTENT(IN) :: SP_GRIDC
+ TYPE (latt),INTENT(IN) :: SP_LATT_CUR
  TYPE (type_info),INTENT(IN) :: SP_T_INFO
+ TYPE(potcar),INTENT(IN) :: SP_P (SP_T_INFO%NTYP)
 
- INTEGER :: SP_NI, SP_NT, SP_NIS
- REAL(q), INTENT(INOUT) :: SP_SCALE
- REAL(q) :: SP_PADDING_TOTN  ! Total padding charge
+ REAL(q),ALLOCATABLE :: WORK( : )
 
- SP_SCALE = 1._q
- SP_NIS = 1
- SP_PADDING_TOTN = 0._q
- !-------------------------------------------------------------
- !loop over all ions
- !-------------------------------------------------------------
- type:DO SP_NT=1,SP_T_INFO%NTYP
-    ions: DO SP_NI=SP_NIS,SP_T_INFO%NITYP(SP_NT)+SP_NIS-1
-        SP_PADDING_TOTN = SP_PADDING_TOTN +  PADDING_C(SP_NT)
-    ENDDO ions
- END DO type
- 
- SP_SCALE = (SP_INFO%NELECT - SP_PADDING_TOTN)/SP_INFO%NELECT
+ !ionic charge in k space
+ COMPLEX(q),INTENT(INOUT) :: SP_NP(SP_GRIDC%MPLWV)
+ ! REAL(q),INTENT(IN) :: sigma_nc_k,sigma_rc_k,CORE_C
+ INTEGER :: SP_NC,SP_N1,SP_N2,SP_N3,SP_NT,SP_NIS,SP_NI,SP_NG
+ INTEGER :: I, J, IND, NX, NY, NZ
+ REAL(q) :: DAMP, MAXPOS(3), TOPZ, MINPOS(3), BOTZ
+ REAL(q), ALLOCATABLE :: NPZ(:)
 
-ENDSUBROUTINE PADDING_FACTOR 
+ BOTZ = ZMIN_SH
+ TOPZ = ZMAX_SH
+ IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMIN_SH FROM INCAR OR DEFAULT",F12.6)') ZMIN_SH
+ IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH FROM INCAR OR DEFAULT",F12.6)') ZMAX_SH
+
+ IF ( ZMIN_SH < 1.E-6_q ) THEN
+     MINPOS = MINVAL( SP_T_INFO%POSION, 2 )
+     BOTZ = MINPOS(3)   
+     IF ( PK_COUNTER == 1 .AND.  SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMIN_SH IS SET AS THE ZCOORDINATE OF THE LOWEST ATOM")')
+ ENDIF
+ IF ( ZMAX_SH < 1.E-6_q .OR. ZMAX_SH < BOTZ ) THEN
+     MAXPOS = MAXVAL( SP_T_INFO%POSION, 2 )
+     TOPZ = MAXPOS(3)
+     IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH IS SET AS THE ZCOORDINATE OF THE HIGHEST ATOM")')
+     !IF (SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        LSOL: ZMAX_SH IS SET AS THE ZCOORDINATE OF THE HIGHEST ATOM")')
+ ENDIF
+ IF ( PK_COUNTER == 1 .AND. SP_IO%IU6>=0) WRITE(SP_IO%IU6, '("        ")')
+
+ ! Calculate plan average padding charge
+ ALLOCATE( NPZ( SP_GRIDC%NGZ ) )
+ NPZ = 0.0_q
+ DO IND = 1, SP_GRIDC%NGZ
+    NPZ(IND) = - ERRFC( ( TOPZ - IND*1.0_q/SP_GRIDC%NGZ ) / SIGMA_SH / SQRT(2._q) )
+    NPZ(IND) = NPZ(IND) + ERRFC( ( BOTZ - IND*1.0_q/SP_GRIDC%NGZ ) / SIGMA_SH / SQRT(2._q) )
+ ENDDO
+ NPZ = NPZ / 2.0_q * nc_k * ALPHA_SH
+ ! IF (SP_IO%IU0>=0) THEN
+ !    OPEN(7891, file = 'NPZ.dat', status = 'UNKNOWN', Access = 'append')
+ !    DO IND = 1, SP_GRIDC%NGZ - 1
+ !        WRITE( 7891, '(E20.11)',  advance="no" ) NPZ( IND )
+ !    ENDDO
+ !    WRITE( 7891, '(E20.11)' ) NPZ( SP_GRIDC%NGZ )
+ !    CLOSE( 7891 )
+ ! ENDIF
+
+ ! Construct 3D grid with average value
+ ALLOCATE( WORK( SP_GRIDC%NGX * SP_GRIDC%NGY ) )
+
+ DO NZ = 1, SP_GRIDC%NGZ
+     WORK = 0._q
+     IND = 0
+     DO NY = 1, SP_GRIDC%NGY
+     DO NX = 1, SP_GRIDC%NGX
+         IND = IND + 1
+         WORK( IND ) = NPZ(NZ)
+     ENDDO
+     ENDDO
+     CALL DIS_GRID_RL_PLANE( SP_GRIDC, WORK, SP_NP, .TRUE., NZ )
+ ENDDO
+
+ CALL FFT3D(SP_NP,SP_GRIDC,-1)
+ CALL SETUNB(SP_NP,SP_GRIDC)
+ SP_NP = SP_NP/SP_GRIDC%NPLWV * SP_LATT_CUR%OMEGA
+
+ DEALLOCATE( WORK )
+
+ DEALLOCATE( NPZ )
+
+END SUBROUTINE COMPUTE_PADDING_CHARGE
 
 !>=====================SUBROUTINE IONIC_CHARGE=========================
 !!
@@ -2572,7 +2552,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 
  MAXPOS = MAXVAL( SP_T_INFO%POSION, 2 )
  TOPZ = MAXPOS(3)
-
+ 
  imag_i = cmplx(0._q,1._q)
 
  SP_N = 0._q
@@ -2633,17 +2613,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              !-------------------------------------------------------
           ELSE IF ( flag == 3 ) THEN
 
-             DAMP = 1.0_q + ERRFC( ( TOPZ - SP_T_INFO%POSION(3, SP_NI))/ INTERFACELIMIT / SQRT(2._q) )/2.0_q * DAMPINGFACTOR
-
              SP_N(SP_NG) = SP_N(SP_NG) + CORE_C(SP_NT) * SP_CEXPF * &
-                  & EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)) + &
-                  & PADDING_C(SP_NT) * SP_CEXPF * &
-                  & EXP(-0.5_q*SP_GSQU*((sigma_rpadding_k(SP_NT)/DAMP)**2))
+                  & EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)) 
 
-          !-------------------------------------------------------
-          ! padding charge density to repel implicit fluid from
-          ! emply space in explict region
-          !-------------------------------------------------------
 
           ENDIF
 
@@ -3135,7 +3107,12 @@ MODULE solvation
   REAL(q), PRIVATE, SAVE  :: lambda_d_k = 1E100_q ! some large value
   REAL(q), PRIVATE, SAVE  :: kappa2b_k = 0._q 
   REAL(q), PRIVATE, SAVE  :: EDIFFSOL ! set in module pot_k
-
+! Explicit/impicit parameter
+  REAL(q), PRIVATE, SAVE  :: ZMIN_SH = 0.0_q
+  REAL(q), PRIVATE, SAVE  :: ZMAX_SH = 0.0_q
+  REAL(q), PRIVATE, SAVE  :: ALPHA_SH = 6.0_q
+  REAL(q), PRIVATE, SAVE  :: SIGMA_SH = 0.05_q
+  INTEGER, PRIVATE, SAVE  :: NWRITE_ITERS = 10
 !local variables
   TYPE (in_struct), PRIVATE, SAVE :: IO_1
   REAL(q), PRIVATE, SAVE :: EDIFF_1
@@ -3388,6 +3365,7 @@ CONTAINS
        ENDIF
        CALL XML_INCAR('LRHOION','L',IDUM,RDUM,CDUM,LRHOION,CHARAC,N)
 
+
        !---------------------------------------------------------------
        !LWRITEEPS
        !---------------------------------------------------------------
@@ -3409,6 +3387,27 @@ CONTAINS
        CALL XML_INCAR('LWRITEEPS','L',IDUM,RDUM,CDUM,LWRITEEPS,CHARAC,N)
 
        !---------------------------------------------------------------
+       !NWRITE_ITERS
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'NWRITE_ITERS','=','#',';','I',NWRITE_ITERS, &
+            &  RDUM,CDUM, LDUM, CHARAC,N,1,IERR)
+#ifdef debugsol
+       IF (IERR == 3 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''NWRITE_ITERS'', number of iterations to write data'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'NWRITE_ITERS = ', NWRITE_ITERS
+       ELSE IF (IERR == 0 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : NWRITE_ITERS = ', NWRITE_ITERS
+       ENDIF
+#endif
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''NWRITE_ITERS''from INCAR.'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+       CALL XML_INCAR('NWRITE_ITERS','I',NWRITE_ITERS,RDUM,CDUM,LDUM,CHARAC,N)
+       
+
+       !---------------------------------------------------------------
        !LSOLHYBRID
        !---------------------------------------------------------------
        CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LSOLHYBRID','=','#',';','L',IDUM, &
@@ -3428,6 +3427,102 @@ CONTAINS
        ENDIF
        CALL XML_INCAR('LSOLHYBRID','L',IDUM,RDUM,CDUM,LSOLHYBRID,CHARAC,N)
      
+       !---------------------------------------------------------------
+       !ZMAX_SH
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'ZMAX_SH','=','#',';','F',IDUM,ZMAX_SH,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+       IF (IERR == 3 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'''ZMAX_SH'', higher limit of eplitcit region, in z fractional coordinate'
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'ZMAX_SH = ', ZMAX_SH
+       ELSE IF (IERR == 0 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Found : ZMAX_SH = ', ZMAX_SH
+
+       ENDIF
+#endif
+
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Error reading ''ZMAX_SH''from INCAR.'
+          IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+       CALL XML_INCAR('ZMAX_SH','F',IDUM,ZMAX_SH,CDUM,LDUM,CHARAC,N)
+
+       !---------------------------------------------------------------
+       !ZMIN_SH
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'ZMIN_SH','=','#',';','F',IDUM,ZMIN_SH,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+       IF (IERR == 3 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'''ZMIN_SH'', lower limit of eplitcit region, in z fractional coordinate'
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'ZMIN_SH= ', ZMIN_SH
+       ELSE IF (IERR == 0 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Found : ZMIN_SH = ', ZMIN_SH
+
+       ENDIF
+#endif
+    
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Error reading ''ZMIN_SH''from INCAR.'
+          IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+       CALL XML_INCAR('ZMIN_SH','F',IDUM,ZMIN_SH,CDUM,LDUM,CHARAC,N)
+       
+       !---------------------------------------------------------------
+       !ALPHA_SH Padding charge factor
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'ALPHA_SH','=','#',';','F',IDUM,ALPHA_SH,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+       IF (IERR == 3 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'''ALPHA_SH'', padding charge factor'
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'ALPHA_SH= ', ALPHA_SH
+       ELSE IF (IERR == 0 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Found : ALPHA_SH = ', ALPHA_SH
+
+       ENDIF
+#endif
+
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Error reading ''ALPHA_SH''from INCAR.'
+          IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+       CALL XML_INCAR('ALPHA_SH','F',IDUM,ALPHA_SH,CDUM,LDUM,CHARAC,N)
+
+       !---------------------------------------------------------------
+       !SIGMA_P width of the interface between eplict and implict region
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'SIGMA_SH','=','#',';','F',IDUM,SIGMA_SH,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+       IF (IERR == 3 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'''SIGMA_SH'', padding charge factor'
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'SIGMA_SH= ', SIGMA_SH
+       ELSE IF (IERR == 0 ) THEN
+
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Found : SIGMA_SH = ', SIGMA_SH
+
+       ENDIF
+#endif
+
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO%IU0>=0) WRITE(IO%IU0,*)'Error reading ''SIGMA_SH''from INCAR.'
+          IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+       CALL XML_INCAR('ALPHA_SH','F',IDUM,SIGMA_SH,CDUM,LDUM,CHARAC,N)
+       
 
     ENDIF ! close lsol
       
@@ -3458,7 +3553,7 @@ CONTAINS
 
     IF (IO%IU6>=0) THEN
        WRITE(IO%IU6,100) LSOL, eb_k, sigma_k, nc_k, tau, &
-            & lambda_d_k, LRHOB, LRHOION, LWRITEEPS, LSOLHYBRID
+            & lambda_d_k, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID, ZMIN_SH, ZMAX_SH, SIGMA_SH, ALPHA_SH
     ENDIF
 
 100 FORMAT( &
@@ -3471,8 +3566,13 @@ CONTAINS
              '   LAMBDA_D_K    =',F10.6,  '     Debye length in Angstroms' /&
              '   LRHOB     =',L6,  '     write boundcharge  density' /&
              '   LRHOION     =',L6,  '     write ioniccharge density' /&
-             '   LWRITEEPS     =',L6,  '     write epsilon' /&
-             '   LSOLHYBRID     =',L6,  '     Use implicit/explict model' /)
+             '   LWRITEEPS      =',L10,  '     write epsilon' /&
+             '   NWRITE_ITERS   =',I10,  '     number of iters to write data' /&
+             '   LSOLHYBRID     =',L10,  '     Use implicit/explict model' / &
+             '   ZMIN_SH        =',F10.6,  '     Lower limit of explict region' /&
+             '   ZMAX_SH        =',F10.6,  '     Higher limit of explict region' /&
+             '   SIGMA_SH       =',F10.6,  '     width of the explict/implicit region' /&
+             '   ALPHA_SH       =',F10.6,  '     factor for padding charge, alpha_sh * nc_k' )
 
 
     RETURN
@@ -3512,7 +3612,12 @@ CONTAINS
        CALL XML_INCAR('LRHOB','L',IDUM,RDUM,CDUM,LRHOB,CHARAC,1)
        CALL XML_INCAR('LRHOION','L',IDUM,RDUM,CDUM,LRHOION,CHARAC,1)
        CALL XML_INCAR('LWRITEEPS','L',IDUM,RDUM,CDUM,LWRITEEPS,CHARAC,1)
+       CALL XML_INCAR('NWRITE_ITERS','I',NWRITE_ITERS,RDUM,CDUM,LDUM,CHARAC,1)
        CALL XML_INCAR('LSOLHYBRID','L',IDUM,RDUM,CDUM,LSOLHYBRID,CHARAC,1)
+       CALL XML_INCAR('ZMIN_SH','F',IDUM,ZMIN_SH,CDUM,LDUM,CHARAC,1)
+       CALL XML_INCAR('ZMAX_SH','F',IDUM,ZMAX_SH,CDUM,LDUM,CHARAC,1)
+       CALL XML_INCAR('ALPHA_SH','F',IDUM,ALPHA_SH,CDUM,LDUM,CHARAC,1)
+       CALL XML_INCAR('SIGMA_SH','F',IDUM,SIGMA_SH,CDUM,LDUM,CHARAC,1)
     ENDIF
 
     CALL XML_CLOSE_TAG
@@ -3562,10 +3667,10 @@ CONTAINS
     IF (.NOT.LSOL) RETURN
 
     ALLOCATE(Vcorr(GRIDC%MPLWV))
-    
+
     CALL SOL_INIT(IO_1, EDIFF_1, INFO, LATT_CUR, GRIDC, T_INFO, P, &
       & sigma_k, nc_k, eb_k, tau, lambda_d_k, kappa2b_k, &
-      & EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, LSOLHYBRID)
+      & EDIFFSOL, LRHOB, LRHOION, LWRITEEPS, NWRITE_ITERS, LSOLHYBRID, ZMIN_SH, ZMAX_SH, ALPHA_SH, SIGMA_SH )
          
     CALL VCORRECTION(GRIDC, P, LATT_CUR, INFO, T_INFO, WDES, &
          & CHTOT, Vcorr, Ecorr, EIFOR_SOL) 
