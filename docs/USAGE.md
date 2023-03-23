@@ -1,3 +1,5 @@
+# General instruction
+
 - For installation please refer to README.md
 
 - Do a vacuum calculation for your system first and save the wavefunction file WAVECAR by 
@@ -52,4 +54,39 @@
     the energy of your system. This correction is given by Q V, where  Q is the net
     charge of the simulation cell and V the shift in reference potential, e.g.,
     V = FERMI_SHIFT. 
+```
+
+# Instruction for SOLHYBRID
+
+```SOLHYBRID``` model is controlled by the following keyworks:
+- LSOLHYBRID
+
+LOGICAL, DEFAULT VALUE: .FALSE.
+
+Turn on/off ```SOLHYBRID``` Model
+
+- METHOD_SH
+
+INTEGER, DEFAILT VALUE: 1
+
+Scheme 1 or 2 for ```SOLHYBRID```
+
+- SIGMA_SH
+
+REAL, DEFAULT VALUE: 0
+
+Define the width of interface region where the padding decays
+
+- ALPHA_SH
+
+REAL, DEFAULT VALUE: 0  
+
+Define the fraction of padding charge used in pseudo density.  
+
+- Example:
+```
+   LSOLHYBRID = .TRUE.
+   METHOD_SH = 1
+   SIGMA_SH  =  0.02857  #H
+   ALPHA_SH  =  0.10
 ```
