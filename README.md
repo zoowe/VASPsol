@@ -147,6 +147,10 @@ If you use the VASPsol package in your research, please cite the following paper
  K. Mathew, V. S. C. Kolluru, S. Mula, S. N. Steinmann, and R. G. Hennig, J. Chem. Phys. 151, 234101 (2019), [doi:10.1063/1.5132354]
  (https://doi.org/10.1063/1.5132354).
 
+If you are using SOLHYBRID model, please site the following paper:
+
+- An Explicit-Implicit Hybrid Solvent Model for Grand Canonical Simulations of the Electrochemical Environment.
+D. Le, ChemRxiv (2023) [doi: 10.26434/chemrxiv-2023-z2n4n](https://doi.org/10.26434/chemrxiv-2023-z2n4n)
 BibTex entry for the Github repository and the publications::
 
 ```
