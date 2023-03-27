@@ -151,6 +151,7 @@ If you are using SOLHYBRID model, please site the following paper:
 
 - An Explicit-Implicit Hybrid Solvent Model for Grand Canonical Simulations of the Electrochemical Environment.
 D. Le, ChemRxiv (2023) [doi: 10.26434/chemrxiv-2023-z2n4n](https://doi.org/10.26434/chemrxiv-2023-z2n4n)
+
 BibTex entry for the Github repository and the publications::
 
 ```
