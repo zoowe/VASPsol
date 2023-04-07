@@ -87,7 +87,7 @@ REAL, DEFAULT VALUE: 0
 
 Define the fraction of padding charge used in pseudo density.  
 
-- Example:
+## Example
 ```
    LSOLHYBRID = .TRUE.
    METHOD_SH = 1
