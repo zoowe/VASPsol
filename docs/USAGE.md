@@ -58,7 +58,10 @@
 
 # Instruction for SOLHYBRID
 
-```SOLHYBRID``` model is controlled by the following keyworks:
+##Impotant note
+```SOLHYBRID``` model is designed for explicit-implicit solvent simulation. It works well only with supercell in which the z-direction is the normal direction of the surface of electrode, which is a slab model, and that number of explicit solvent molecules is sufficent to form (multiple) full layers.
+
+##```SOLHYBRID``` model is controlled by the following keyworks
 
 - LSOLHYBRID
 
