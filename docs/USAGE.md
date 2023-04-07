@@ -76,7 +76,7 @@ Scheme 1 or 2 for ```SOLHYBRID```
 
 REAL, DEFAULT VALUE: 0
 
-Define the width of interface region where the padding decays
+Define the width (in direct coordinate, z direction) of interface region where the padding decays
 
 - ALPHA_SH
 
@@ -88,6 +88,6 @@ Define the fraction of padding charge used in pseudo density.
 ```
    LSOLHYBRID = .TRUE.
    METHOD_SH = 1
-   SIGMA_SH  =  0.02857  #H
+   SIGMA_SH  =  0.02857  
    ALPHA_SH  =  0.10
 ```
