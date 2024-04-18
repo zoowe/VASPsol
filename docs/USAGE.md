@@ -87,6 +87,12 @@ REAL, DEFAULT VALUE: 0
 
 Define the fraction of padding charge used in pseudo density.  
 
+- LWRITEEPS
+
+LOGICAL, DEFAULT VALUE: .FALSE.
+
+If .TRUE., ```epsilon``` will be written in ```EPS.vasp``` file, which has the same format as ```CHGCAR```. Note that this file is written at the end of every electronic iteration. Please follow the recommendation for writing ```RHOION``` and ```RHOB``` files to avoid unwantted writting.
+
 ## Example
 ```
    LSOLHYBRID = .TRUE.
