@@ -91,7 +91,13 @@ Define the fraction of padding charge used in pseudo density.
 
 LOGICAL, DEFAULT VALUE: .FALSE.
 
-If .TRUE., ```epsilon``` will be written in ```EPS.vasp``` file, which has the same format as ```CHGCAR```. Note that this file is written at the end of every electronic iteration. Please follow the recommendation for writing ```RHOION``` and ```RHOB``` files to avoid unwantted writting.
+If .TRUE., ```epsilon``` will be written in ```EPS.vasp``` file, which has the same format as ```CHGCAR```. Note that this file is written at the end of every electronic iteration. Please follow the recommendation for writing ```RHOION``` and ```RHOB``` files to avoid unwantted writting and/or use ```NWRITE_ITERS``` to control frequence of the writings.
+
+- NWRITE_ITERS
+
+INTERGER, DEFAULT VALUE: 10
+
+Number of electronic iterations to be skipped before rewriting ```EPS.vasp```, ```RHOION```, and ```RHOB``` files. 
 
 ## Example
 ```
